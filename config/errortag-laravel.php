@@ -3,7 +3,7 @@
 // config for ErrorTag/ErrorTag
 return [
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | ErrorTag API Key
     |--------------------------------------------------------------------------
@@ -13,9 +13,9 @@ return [
     |
     */
 
-  'api_key' => env('ERRORTAG_KEY'),
+    'api_key' => env('ERRORTAG_KEY'),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | ErrorTag API Endpoint
     |--------------------------------------------------------------------------
@@ -25,9 +25,9 @@ return [
     |
     */
 
-  'api_endpoint' => env('ERRORTAG_ENDPOINT', 'https://api.errortag.com/api/errors'),
+    'api_endpoint' => env('ERRORTAG_ENDPOINT', 'https://api.errortag.com/api/errors'),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Environment
     |--------------------------------------------------------------------------
@@ -37,9 +37,9 @@ return [
     |
     */
 
-  'environment' => env('ERRORTAG_ENV', env('APP_ENV', 'production')),
+    'environment' => env('ERRORTAG_ENV', env('APP_ENV', 'production')),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Enable Error Tracking
     |--------------------------------------------------------------------------
@@ -49,9 +49,9 @@ return [
     |
     */
 
-  'enabled' => env('ERRORTAG_ENABLED', true),
+    'enabled' => env('ERRORTAG_ENABLED', true),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Ignored Exceptions
     |--------------------------------------------------------------------------
@@ -61,12 +61,12 @@ return [
     |
     */
 
-  'ignored_exceptions' => [
-    // Illuminate\Validation\ValidationException::class,
-    // Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class,
-  ],
+    'ignored_exceptions' => [
+        // Illuminate\Validation\ValidationException::class,
+        // Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class,
+    ],
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Sample Rate
     |--------------------------------------------------------------------------
@@ -77,9 +77,9 @@ return [
     |
     */
 
-  'sample_rate' => env('ERRORTAG_SAMPLE_RATE', 1.0),
+    'sample_rate' => env('ERRORTAG_SAMPLE_RATE', 1.0),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Capture Request Body
     |--------------------------------------------------------------------------
@@ -90,9 +90,9 @@ return [
     |
     */
 
-  'capture_request_body' => env('ERRORTAG_CAPTURE_BODY', false),
+    'capture_request_body' => env('ERRORTAG_CAPTURE_BODY', false),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Sanitize Headers
     |--------------------------------------------------------------------------
@@ -102,15 +102,15 @@ return [
     |
     */
 
-  'sanitize_headers' => [
-    'Authorization',
-    'Cookie',
-    'Set-Cookie',
-    'X-CSRF-Token',
-    'X-XSRF-Token',
-  ],
+    'sanitize_headers' => [
+        'Authorization',
+        'Cookie',
+        'Set-Cookie',
+        'X-CSRF-Token',
+        'X-XSRF-Token',
+    ],
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Sanitize Request Fields
     |--------------------------------------------------------------------------
@@ -120,19 +120,19 @@ return [
     |
     */
 
-  'sanitize_fields' => [
-    'password',
-    'password_confirmation',
-    'token',
-    'secret',
-    'api_key',
-    'credit_card',
-    'card_number',
-    'cvv',
-    'ssn',
-  ],
+    'sanitize_fields' => [
+        'password',
+        'password_confirmation',
+        'token',
+        'secret',
+        'api_key',
+        'credit_card',
+        'card_number',
+        'cvv',
+        'ssn',
+    ],
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Capture User Information
     |--------------------------------------------------------------------------
@@ -142,9 +142,9 @@ return [
     |
     */
 
-  'capture_user' => env('ERRORTAG_CAPTURE_USER', true),
+    'capture_user' => env('ERRORTAG_CAPTURE_USER', true),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | HTTP Client Timeout
     |--------------------------------------------------------------------------
@@ -154,9 +154,9 @@ return [
     |
     */
 
-  'timeout' => env('ERRORTAG_TIMEOUT', 5),
+    'timeout' => env('ERRORTAG_TIMEOUT', 5),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Queue Connection
     |--------------------------------------------------------------------------
@@ -166,9 +166,9 @@ return [
     |
     */
 
-  'queue_connection' => env('ERRORTAG_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
+    'queue_connection' => env('ERRORTAG_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Queue Name
     |--------------------------------------------------------------------------
@@ -178,9 +178,9 @@ return [
     |
     */
 
-  'queue_name' => env('ERRORTAG_QUEUE', 'default'),
+    'queue_name' => env('ERRORTAG_QUEUE', 'default'),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Release Strategy
     |--------------------------------------------------------------------------
@@ -190,9 +190,9 @@ return [
     |
     */
 
-  'release' => env('ERRORTAG_RELEASE', null),
+    'release' => env('ERRORTAG_RELEASE', null),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Server Name
     |--------------------------------------------------------------------------
@@ -202,9 +202,9 @@ return [
     |
     */
 
-  'server_name' => env('ERRORTAG_SERVER_NAME', gethostname()),
+    'server_name' => env('ERRORTAG_SERVER_NAME', gethostname()),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Capture Stack Trace Arguments
     |--------------------------------------------------------------------------
@@ -214,9 +214,9 @@ return [
     |
     */
 
-  'capture_stack_trace_args' => env('ERRORTAG_CAPTURE_ARGS', false),
+    'capture_stack_trace_args' => env('ERRORTAG_CAPTURE_ARGS', false),
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Maximum Stack Trace Depth
     |--------------------------------------------------------------------------
@@ -226,6 +226,6 @@ return [
     |
     */
 
-  'max_stack_trace_depth' => env('ERRORTAG_MAX_TRACE_DEPTH', 50),
+    'max_stack_trace_depth' => env('ERRORTAG_MAX_TRACE_DEPTH', 50),
 
 ];
