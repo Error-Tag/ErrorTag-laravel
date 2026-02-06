@@ -27,9 +27,19 @@ class SendErrorToErrorTagJob implements ShouldQueue
 
     public function handle(ErrorTagApiClient $client): void
     {
-        $payload = $this->reconstructPayload();
+        try {
+            $payload = $this->reconstructPayload();
+            $client->send($payload);
+        } catch (\Throwable $e) {
+            // Log the failure to reconstruct/send payload
+            \Illuminate\Support\Facades\Log::error('ErrorTag job failed', [
+                'error' => $e->getMessage(),
+                'payload_fingerprint' => $this->errorPayload['fingerprint'] ?? 'unknown',
+            ]);
 
-        $client->send($payload);
+            // Don't rethrow - we don't want to fill the failed jobs table
+            // The error is already logged
+        }
     }
 
     /**

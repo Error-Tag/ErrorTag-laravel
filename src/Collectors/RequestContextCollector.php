@@ -19,16 +19,25 @@ class RequestContextCollector
             return null;
         }
 
-        return new RequestData(
-            url: $request->fullUrl(),
-            method: $request->method(),
-            headers: $this->sanitizeHeaders($request->headers->all()),
-            body: $this->captureBody ? $this->sanitizeBody($request->all()) : null,
-            routeName: $request->route()?->getName(),
-            controller: $this->getController($request),
-            ip: $request->ip(),
-            userAgent: $request->userAgent(),
-        );
+        try {
+            return new RequestData(
+                url: $request->fullUrl(),
+                method: $request->method(),
+                headers: $this->sanitizeHeaders($request->headers->all()),
+                body: $this->captureBody ? $this->sanitizeBody($request->all()) : null,
+                routeName: $request->route()?->getName(),
+                controller: $this->getController($request),
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        } catch (\Throwable $e) {
+            // If request collection fails, return null rather than breaking error reporting
+            \Illuminate\Support\Facades\Log::warning('ErrorTag failed to collect request context', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     protected function sanitizeHeaders(array $headers): array

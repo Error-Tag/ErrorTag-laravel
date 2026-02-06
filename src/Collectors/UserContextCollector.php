@@ -18,18 +18,27 @@ class UserContextCollector
             return null;
         }
 
-        $user = Auth::user();
+        try {
+            $user = Auth::user();
 
-        if (! $user) {
+            if (! $user) {
+                return null;
+            }
+
+            return new UserData(
+                id: $user->getAuthIdentifier(),
+                email: $this->getUserEmail($user),
+                name: $this->getUserName($user),
+                attributes: $this->getUserAttributes($user),
+            );
+        } catch (\Throwable $e) {
+            // If user collection fails, return null rather than breaking error reporting
+            \Illuminate\Support\Facades\Log::warning('ErrorTag failed to collect user context', [
+                'error' => $e->getMessage(),
+            ]);
+
             return null;
         }
-
-        return new UserData(
-            id: $user->getAuthIdentifier(),
-            email: $this->getUserEmail($user),
-            name: $this->getUserName($user),
-            attributes: $this->getUserAttributes($user),
-        );
     }
 
     protected function getUserEmail(Authenticatable $user): ?string

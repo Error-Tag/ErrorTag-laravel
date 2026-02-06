@@ -9,12 +9,23 @@ class ApplicationContextCollector
 {
     public function collect(): ApplicationData
     {
-        return new ApplicationData(
-            laravelVersion: Application::VERSION,
-            phpVersion: PHP_VERSION,
-            environment: config('errortag-laravel.environment', config('app.env', 'production')),
-            serverName: config('errortag-laravel.server_name', gethostname()),
-            appName: config('app.name'),
-        );
+        try {
+            return new ApplicationData(
+                laravelVersion: Application::VERSION,
+                phpVersion: PHP_VERSION,
+                environment: config('errortag-laravel.environment', config('app.env', 'production')),
+                serverName: config('errortag-laravel.server_name', gethostname()),
+                appName: config('app.name'),
+            );
+        } catch (\Throwable $e) {
+            // Fallback to minimal data if collection fails
+            return new ApplicationData(
+                laravelVersion: Application::VERSION ?? 'unknown',
+                phpVersion: PHP_VERSION,
+                environment: 'unknown',
+                serverName: 'unknown',
+                appName: null,
+            );
+        }
     }
 }
