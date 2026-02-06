@@ -1,7 +1,7 @@
 # ErrorTag
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/error-tag/errortag-laravel.svg?style=flat-square)](https://packagist.org/packages/error-tag/errortag-laravel)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/error-tag/errortag-laravel/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/error-tag/errortag-laravel/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![tests](https://github.com/Error-Tag/ErrorTag-laravel/actions/workflows/run-tests.yml/badge.svg)](https://github.com/Error-Tag/ErrorTag-laravel/actions/workflows/run-tests.yml)
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/error-tag/errortag-laravel/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/error-tag/errortag-laravel/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/error-tag/errortag-laravel.svg?style=flat-square)](https://packagist.org/packages/error-tag/errortag-laravel)
 
