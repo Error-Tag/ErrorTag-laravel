@@ -1,59 +1,78 @@
-# This is my package errortag-laravel
+# ErrorTag
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/error-tag/errortag-laravel.svg?style=flat-square)](https://packagist.org/packages/error-tag/errortag-laravel)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/error-tag/errortag-laravel/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/error-tag/errortag-laravel/actions?query=workflow%3Arun-tests+branch%3Amain)
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/error-tag/errortag-laravel/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/error-tag/errortag-laravel/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/error-tag/errortag-laravel.svg?style=flat-square)](https://packagist.org/packages/error-tag/errortag-laravel)
 
-This is where your description should go. Limit it to a paragraph or two. Consider adding a small example.
+**ErrorTag** is an error monitoring and observability platform. This package is the client SDK that captures errors from your Laravel application and sends them to the ErrorTag dashboard for analysis, alerting, and team collaboration.
 
-## Support us
+## Features
 
-[<img src="https://github-ads.s3.eu-central-1.amazonaws.com/ErrorTag-laravel.jpg?t=1" width="419px" />](https://spatie.be/github-ad-click/ErrorTag-laravel)
-
-We invest a lot of resources into creating [best in class open source packages](https://spatie.be/open-source). You can support us by [buying one of our paid products](https://spatie.be/open-source/support-us).
-
-We highly appreciate you sending us a postcard from your hometown, mentioning which of our package(s) you are using. You'll find our address on [our contact page](https://spatie.be/about-us). We publish all received postcards on [our virtual postcard wall](https://spatie.be/open-source/postcards).
-
+- **Automatic Error Capture** - Hooks into Laravel's exception handler
+- **Intelligent Error Grouping** - Groups similar errors using fingerprints
+- **Privacy-First** - Sanitizes sensitive data (passwords, tokens, headers)
+- **Async by Default** - Queues errors for background sending
+- **Rich Context** - Captures request, user, and application data
+- **Highly Configurable** - Sample rates, ignored exceptions, and more
+- **Fully Tested** - Comprehensive test coverage with Pest
 ## Installation
 
-You can install the package via composer:
+Install the package via Composer:
 
 ```bash
 composer require error-tag/errortag-laravel
 ```
 
-You can publish and run the migrations with:
-
-```bash
-php artisan vendor:publish --tag="errortag-laravel-migrations"
-php artisan migrate
-```
-
-You can publish the config file with:
+Publish the configuration file:
 
 ```bash
 php artisan vendor:publish --tag="errortag-laravel-config"
 ```
 
-This is the contents of the published config file:
+Add your ErrorTag API key to `.env`:
 
-```php
-return [
-];
+```env
+ERRORTAG_KEY=project_xxxxx
+ERRORTAG_ENV=production
 ```
 
-Optionally, you can publish the views using
+## Quick Start
+
+Once installed, ErrorTag automatically captures all unhandled exceptions. Test your setup:
 
 ```bash
-php artisan vendor:publish --tag="errortag-laravel-views"
+php artisan errortag:test --send-test-error
 ```
 
 ## Usage
 
+### Automatic Capture
+
 ```php
-$errorTag = new ErrorTag\ErrorTag();
-echo $errorTag->echoPhrase('Hello, ErrorTag!');
+// This exception is automatically captured
+throw new Exception('Something went wrong!');
+```
+
+### Manual Reporting
+
+```php
+use ErrorTag\ErrorTag\Facades\ErrorTag;
+
+try {
+    processPayment($order);
+} catch (Exception $e) {
+    ErrorTag::captureException($e);
+}
+```
+
+### Adding Context
+
+```php
+ErrorTag::context([
+    'order_id' => $order->id,
+    'payment_provider' => 'stripe',
+]);
 ```
 
 ## Testing
