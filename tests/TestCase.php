@@ -2,9 +2,9 @@
 
 namespace ErrorTag\ErrorTag\Tests;
 
+use ErrorTag\ErrorTag\ErrorTagServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use ErrorTag\ErrorTag\ErrorTagServiceProvider;
 
 class TestCase extends Orchestra
 {
