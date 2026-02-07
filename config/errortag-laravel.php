@@ -62,8 +62,12 @@ return [
     */
 
     'ignored_exceptions' => [
-        // Illuminate\Validation\ValidationException::class,
+        // Add exception classes you want to ignore
+        // Example: Illuminate\Validation\ValidationException::class,
+        // Note: 404, 500, and other HTTP errors are now captured by default
+        // Uncomment below to ignore them:
         // Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class,
+        // Symfony\Component\HttpKernel\Exception\HttpException::class,
     ],
 
     /*
@@ -78,6 +82,32 @@ return [
     */
 
     'sample_rate' => env('ERRORTAG_SAMPLE_RATE', 1.0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Capture PHP Errors
+    |--------------------------------------------------------------------------
+    |
+    | Capture PHP errors like warnings, notices, and deprecations.
+    | Set to false if you only want to capture exceptions.
+    |
+    */
+
+    'capture_php_errors' => env('ERRORTAG_CAPTURE_PHP_ERRORS', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Minimum Error Level
+    |--------------------------------------------------------------------------
+    |
+    | The minimum PHP error level to capture.
+    | E_ALL: Capture everything (recommended)
+    | E_ERROR | E_WARNING: Only errors and warnings
+    | E_ERROR: Only fatal errors
+    |
+    */
+
+    'minimum_error_level' => env('ERRORTAG_MIN_ERROR_LEVEL', E_ALL),
 
     /*
     |--------------------------------------------------------------------------
@@ -227,5 +257,41 @@ return [
     */
 
     'max_stack_trace_depth' => env('ERRORTAG_MAX_TRACE_DEPTH', 50),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Performance Monitoring
+    |--------------------------------------------------------------------------
+    |
+    | Enable performance monitoring to track response times, database queries,
+    | and memory usage for each request.
+    |
+    */
+
+    'enable_performance_monitoring' => env('ERRORTAG_PERFORMANCE_MONITORING', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Slow Query Threshold
+    |--------------------------------------------------------------------------
+    |
+    | Database queries taking longer than this threshold (in milliseconds)
+    | will be logged as slow queries.
+    |
+    */
+
+    'slow_query_threshold' => env('ERRORTAG_SLOW_QUERY_THRESHOLD', 100),
+
+    /*
+    |--------------------------------------------------------------------------
+    | N+1 Query Detection Threshold
+    |--------------------------------------------------------------------------
+    |
+    | Number of times a similar query must execute to be flagged as N+1.
+    | Set to 0 to disable N+1 detection.
+    |
+    */
+
+    'n_plus_one_threshold' => env('ERRORTAG_N_PLUS_ONE_THRESHOLD', 5),
 
 ];
