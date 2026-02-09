@@ -176,7 +176,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
       $error = error_get_last();
 
       // Capture all fatal errors including parse errors
-      if ($error === null || ! in_array($error['type'], [
+      if ($error === null || !in_array($error['type'], [
         E_ERROR,           // Fatal run-time errors
         E_PARSE,           // Compile-time parse errors (syntax errors)
         E_CORE_ERROR,      // Fatal errors during PHP's initial startup
@@ -205,7 +205,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         if ($payload) {
           // For fatal errors, we need to send synchronously since the app is dying
           $apiClient = $this->app->make(ErrorTagApiClient::class);
-          $apiClient->send($payload->toArray());
+          $apiClient->send($payload);
         }
       } catch (Throwable $e) {
         // Can't do much here since we're already in a fatal error state
