@@ -212,6 +212,32 @@ return [
 
   /*
     |--------------------------------------------------------------------------
+    | Circuit Breaker Threshold
+    |--------------------------------------------------------------------------
+    |
+    | Number of consecutive failures before the circuit breaker triggers.
+    | When triggered, ErrorTag will stop attempting to report this specific
+    | error for the TTL period. This prevents infinite loops and server crashes.
+    |
+    */
+
+  'circuit_breaker_threshold' => env('ERRORTAG_CIRCUIT_BREAKER_THRESHOLD', 5),
+
+  /*
+    |--------------------------------------------------------------------------
+    | Circuit Breaker TTL
+    |--------------------------------------------------------------------------
+    |
+    | Time (in seconds) that the circuit breaker will block an error after
+    | reaching the threshold. After this time, ErrorTag will try again.
+    | Default: 3600 seconds (1 hour)
+    |
+    */
+
+  'circuit_breaker_ttl' => env('ERRORTAG_CIRCUIT_BREAKER_TTL', 3600),
+
+  /*
+    |--------------------------------------------------------------------------
     | Release Strategy
     |--------------------------------------------------------------------------
     |
