@@ -16,6 +16,8 @@ use Throwable;
 
 class ErrorTagServiceProvider extends PackageServiceProvider
 {
+  protected static bool $capturing = false;
+
   public function configurePackage(Package $package): void
   {
     $package
@@ -78,6 +80,22 @@ class ErrorTagServiceProvider extends PackageServiceProvider
     $handler = $this->app->make(ExceptionHandler::class);
 
     $handler->reportable(function (Throwable $e) { // @phpstan-ignore-line
+      // Prevent ErrorTag from capturing its own errors
+      if (self::$capturing) {
+        return;
+      }
+
+      // Don't capture errors from ErrorTag package itself
+      $trace = $e->getTrace();
+      if (!empty($trace)) {
+        $firstFrame = $trace[0] ?? [];
+        if (isset($firstFrame['file']) && (str_contains($firstFrame['file'], 'ErrorTag') || str_contains($firstFrame['file'], 'errortag'))) {
+          return;
+        }
+      }
+
+      self::$capturing = true;
+
       try {
         $errorTag = $this->app->make(ErrorTag::class);
         $payload = $errorTag->captureException($e);
@@ -92,6 +110,8 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         Log::error('ErrorTag failed to capture exception', [
           'error' => $errorTagException->getMessage(),
         ]);
+      } finally {
+        self::$capturing = false;
       }
     });
   }
@@ -104,6 +124,16 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
     // Capture PHP errors (warnings, notices, deprecations, etc.)
     set_error_handler(function ($severity, $message, $file, $line) {
+      // Prevent ErrorTag from capturing its own errors (avoid infinite loops)
+      if (self::$capturing) {
+        return false;
+      }
+
+      // Don't capture errors from ErrorTag itself
+      if (str_contains($file, 'ErrorTag') || str_contains($file, 'errortag')) {
+        return false;
+      }
+
       // Don't capture errors that are suppressed with @
       if (!(error_reporting() & $severity)) {
         return false;
@@ -114,6 +144,8 @@ class ErrorTagServiceProvider extends PackageServiceProvider
       if (!($severity & $minLevel)) {
         return false;
       }
+
+      self::$capturing = true;
 
       try {
         $errorTag = $this->app->make(ErrorTag::class);
@@ -129,6 +161,8 @@ class ErrorTagServiceProvider extends PackageServiceProvider
       } catch (Throwable $e) {
         // Don't break the app if ErrorTag fails
         Log::error('ErrorTag error handler failed', ['error' => $e->getMessage()]);
+      } finally {
+        self::$capturing = false;
       }
 
       // Let PHP handle the error normally as well
