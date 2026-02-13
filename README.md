@@ -12,8 +12,9 @@
 - **Automatic Error Capture** - Hooks into Laravel's exception handler
 - **Intelligent Error Grouping** - Groups similar errors using fingerprints
 - **Privacy-First** - Sanitizes sensitive data (passwords, tokens, headers)
-- **Async by Default** - Queues errors for background sending
+- **Works Everywhere** - Sync mode (no queue required) or async via queue
 - **Rich Context** - Captures request, user, and application data
+- **Circuit Breaker** - Prevents infinite loops and server overload
 - **Highly Configurable** - Sample rates, ignored exceptions, and more
 - **Fully Tested** - Comprehensive test coverage with Pest
 ## Installation
@@ -39,10 +40,30 @@ ERRORTAG_ENV=production
 
 ## Quick Start
 
-Once installed, ErrorTag automatically captures all unhandled exceptions. Test your setup:
+Once installed, ErrorTag automatically captures all unhandled exceptions.
+
+**By default, errors are sent synchronously** (no queue worker required). This works perfectly on shared hosting, local development, and production.
+
+Test your setup:
 
 ```bash
 php artisan errortag:test --send-test-error
+```
+
+### Queue Configuration (Optional)
+
+For high-traffic applications, you can enable async sending via queue:
+
+```env
+ERRORTAG_USE_QUEUE=true
+ERRORTAG_QUEUE_CONNECTION=database
+```
+
+**Important:** Only enable queues if you have workers running via cron or supervisor.
+
+**For shared hosting with cron:** Add this to your crontab:
+```bash
+* * * * * php /path/to/artisan queue:work --stop-when-empty --tries=2 --max-time=50
 ```
 
 ## Usage
@@ -73,6 +94,48 @@ ErrorTag::context([
     'order_id' => $order->id,
     'payment_provider' => 'stripe',
 ]);
+```
+
+## Configuration
+
+### Sync vs Async Sending
+
+**Sync Mode (Default - Recommended)**
+```env
+ERRORTAG_USE_QUEUE=false
+ERRORTAG_SYNC_TIMEOUT=2  # Fast timeout to avoid blocking requests
+```
+
+- Works immediately after installation
+- No queue worker required
+- Perfect for shared hosting
+- Great for low-medium traffic
+
+**Async Mode (Queue)**
+```env
+ERRORTAG_USE_QUEUE=true
+ERRORTAG_QUEUE_CONNECTION=database
+ERRORTAG_TIMEOUT=5
+```
+
+- Better for high-traffic apps
+- Doesn't block user requests
+- Requires queue worker running
+
+### Other Options
+
+```env
+# Disable ErrorTag in local environment
+ERRORTAG_ENABLED=true
+
+# Sample rate (capture 50% of errors)
+ERRORTAG_SAMPLE_RATE=0.5
+
+# Don't capture request body (privacy)
+ERRORTAG_CAPTURE_BODY=false
+
+# Circuit breaker (stop after 5 failures)
+ERRORTAG_CIRCUIT_BREAKER_THRESHOLD=5
 ```
 
 ## Testing
