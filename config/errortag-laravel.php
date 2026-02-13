@@ -180,7 +180,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Maximum time (in seconds) to wait when sending errors to ErrorTag API.
-    | Errors will be queued for retry if the timeout is exceeded.
+    | For sync mode: Use 2 seconds to prevent blocking user requests.
+    | For queue mode: Can be higher (5 seconds) since it runs in background.
     |
     */
 
@@ -188,15 +189,45 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Queue Connection
+    | Sync Timeout
     |--------------------------------------------------------------------------
     |
-    | The queue connection to use for sending errors asynchronously.
-    | Set to null to send errors synchronously (not recommended).
+    | Timeout for synchronous error sending (when queue is disabled).
+    | Keep this short (1-2 seconds) to avoid blocking user requests.
+    | If timeout is exceeded, the error will be logged but not sent.
     |
     */
 
-    'queue_connection' => env('ERRORTAG_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
+    'sync_timeout' => env('ERRORTAG_SYNC_TIMEOUT', 2),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Use Queue
+    |--------------------------------------------------------------------------
+    |
+    | Whether to send errors asynchronously via queue or synchronously.
+    |
+    | true:  Send via queue (requires queue worker running)
+    | false: Send immediately during request (default, works everywhere)
+    |
+    | Recommendation: Use sync (false) unless you have queue workers running.
+    | Sync mode has a short timeout to prevent blocking user experience.
+    |
+    */
+
+    'use_queue' => env('ERRORTAG_USE_QUEUE', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Connection
+    |--------------------------------------------------------------------------
+    |
+    | The queue connection to use when 'use_queue' is enabled.
+    | Only used if use_queue is true.
+    |
+    */
+
+    'queue_connection' => env('ERRORTAG_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database')),
 
     /*
     |--------------------------------------------------------------------------
@@ -205,10 +236,37 @@ return [
     |
     | The queue name to use for ErrorTag jobs.
     | Useful if you want to separate ErrorTag jobs from other background jobs.
+    | Only used if use_queue is true.
     |
     */
 
     'queue_name' => env('ERRORTAG_QUEUE', 'default'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Circuit Breaker Threshold
+    |--------------------------------------------------------------------------
+    |
+    | Number of consecutive failures before the circuit breaker triggers.
+    | When triggered, ErrorTag will stop attempting to report this specific
+    | error for the TTL period. This prevents infinite loops and server crashes.
+    |
+    */
+
+    'circuit_breaker_threshold' => env('ERRORTAG_CIRCUIT_BREAKER_THRESHOLD', 5),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Circuit Breaker TTL
+    |--------------------------------------------------------------------------
+    |
+    | Time (in seconds) that the circuit breaker will block an error after
+    | reaching the threshold. After this time, ErrorTag will try again.
+    | Default: 3600 seconds (1 hour)
+    |
+    */
+
+    'circuit_breaker_ttl' => env('ERRORTAG_CIRCUIT_BREAKER_TTL', 3600),
 
     /*
     |--------------------------------------------------------------------------

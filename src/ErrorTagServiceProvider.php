@@ -16,6 +16,8 @@ use Throwable;
 
 class ErrorTagServiceProvider extends PackageServiceProvider
 {
+    protected static bool $capturing = false;
+
     public function configurePackage(Package $package): void
     {
         $package
@@ -72,26 +74,71 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         }
     }
 
+    /**
+     * Send error to ErrorTag (sync or async based on config).
+     */
+    protected function sendError($payload): void
+    {
+        if (! $payload) {
+            return;
+        }
+
+        $useQueue = config('errortag-laravel.use_queue', false);
+
+        if ($useQueue) {
+            // Async: Send via queue
+            SendErrorToErrorTagJob::dispatch($payload->toArray());
+        } else {
+            // Sync: Send immediately with short timeout
+            try {
+                $apiClient = $this->app->make(ErrorTagApiClient::class);
+                $timeout = config('errortag-laravel.sync_timeout', 2);
+                $apiClient->sendWithTimeout($payload, $timeout);
+            } catch (Throwable $e) {
+                // Silently fail - don't break the app or log excessively
+                // Only log if debug mode is on
+                if (config('app.debug')) {
+                    Log::debug('ErrorTag sync send failed', ['error' => $e->getMessage()]);
+                }
+            }
+        }
+    }
+
     protected function registerExceptionHandler(): void
     {
         /** @var \Illuminate\Foundation\Exceptions\Handler $handler */
         $handler = $this->app->make(ExceptionHandler::class);
 
         $handler->reportable(function (Throwable $e) { // @phpstan-ignore-line
+            // Prevent ErrorTag from capturing its own errors
+            if (self::$capturing) {
+                return;
+            }
+
+            // Don't capture errors from ErrorTag package itself
+            $trace = $e->getTrace();
+            if (! empty($trace)) {
+                $firstFrame = $trace[0] ?? [];
+                if (isset($firstFrame['file']) && (str_contains($firstFrame['file'], 'ErrorTag') || str_contains($firstFrame['file'], 'errortag'))) {
+                    return;
+                }
+            }
+
+            self::$capturing = true;
+
             try {
                 $errorTag = $this->app->make(ErrorTag::class);
                 $payload = $errorTag->captureException($e);
 
-                if ($payload) {
-                    // Queue the error for async sending
-                    SendErrorToErrorTagJob::dispatch($payload->toArray());
-                }
+                $this->sendError($payload);
             } catch (Throwable $errorTagException) {
                 // Never let ErrorTag break the application
                 // Silently log the failure
                 Log::error('ErrorTag failed to capture exception', [
                     'error' => $errorTagException->getMessage(),
                 ]);
+            } finally {
+                self::$capturing = false;
             }
         });
     }
@@ -104,6 +151,16 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
         // Capture PHP errors (warnings, notices, deprecations, etc.)
         set_error_handler(function ($severity, $message, $file, $line) {
+            // Prevent ErrorTag from capturing its own errors (avoid infinite loops)
+            if (self::$capturing) {
+                return false;
+            }
+
+            // Don't capture errors from ErrorTag itself
+            if (str_contains($file, 'ErrorTag') || str_contains($file, 'errortag')) {
+                return false;
+            }
+
             // Don't capture errors that are suppressed with @
             if (! (error_reporting() & $severity)) {
                 return false;
@@ -115,6 +172,8 @@ class ErrorTagServiceProvider extends PackageServiceProvider
                 return false;
             }
 
+            self::$capturing = true;
+
             try {
                 $errorTag = $this->app->make(ErrorTag::class);
 
@@ -123,12 +182,12 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
                 $payload = $errorTag->captureException($exception);
 
-                if ($payload) {
-                    SendErrorToErrorTagJob::dispatch($payload->toArray());
-                }
+                $this->sendError($payload);
             } catch (Throwable $e) {
                 // Don't break the app if ErrorTag fails
                 Log::error('ErrorTag error handler failed', ['error' => $e->getMessage()]);
+            } finally {
+                self::$capturing = false;
             }
 
             // Let PHP handle the error normally as well
@@ -171,7 +230,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
                 if ($payload) {
                     // For fatal errors, we need to send synchronously since the app is dying
                     $apiClient = $this->app->make(ErrorTagApiClient::class);
-                    $apiClient->send($payload->toArray());
+                    $apiClient->send($payload);
                 }
             } catch (Throwable $e) {
                 // Can't do much here since we're already in a fatal error state
