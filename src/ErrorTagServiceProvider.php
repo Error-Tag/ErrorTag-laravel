@@ -74,6 +74,36 @@ class ErrorTagServiceProvider extends PackageServiceProvider
     }
   }
 
+  /**
+   * Send error to ErrorTag (sync or async based on config).
+   */
+  protected function sendError($payload): void
+  {
+    if (!$payload) {
+      return;
+    }
+
+    $useQueue = config('errortag-laravel.use_queue', false);
+
+    if ($useQueue) {
+      // Async: Send via queue
+      SendErrorToErrorTagJob::dispatch($payload->toArray());
+    } else {
+      // Sync: Send immediately with short timeout
+      try {
+        $apiClient = $this->app->make(ErrorTagApiClient::class);
+        $timeout = config('errortag-laravel.sync_timeout', 2);
+        $apiClient->sendWithTimeout($payload, $timeout);
+      } catch (Throwable $e) {
+        // Silently fail - don't break the app or log excessively
+        // Only log if debug mode is on
+        if (config('app.debug')) {
+          Log::debug('ErrorTag sync send failed', ['error' => $e->getMessage()]);
+        }
+      }
+    }
+  }
+
   protected function registerExceptionHandler(): void
   {
     /** @var \Illuminate\Foundation\Exceptions\Handler $handler */
@@ -100,10 +130,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         $errorTag = $this->app->make(ErrorTag::class);
         $payload = $errorTag->captureException($e);
 
-        if ($payload) {
-          // Queue the error for async sending
-          SendErrorToErrorTagJob::dispatch($payload->toArray());
-        }
+        $this->sendError($payload);
       } catch (Throwable $errorTagException) {
         // Never let ErrorTag break the application
         // Silently log the failure
@@ -155,9 +182,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
         $payload = $errorTag->captureException($exception);
 
-        if ($payload) {
-          SendErrorToErrorTagJob::dispatch($payload->toArray());
-        }
+        $this->sendError($payload);
       } catch (Throwable $e) {
         // Don't break the app if ErrorTag fails
         Log::error('ErrorTag error handler failed', ['error' => $e->getMessage()]);
