@@ -1,10 +1,15 @@
 {
     "name": "error-tag/errortag-laravel",
-    "description": "This is my package errortag-laravel",
+    "description": "ErrorTag is an error monitoring and observability platform. This package is the client SDK that captures errors from your Laravel application and sends them to the ErrorTag dashboard for analysis, alerting, and team collaboration.",
     "keywords": [
         "Error-Tag",
         "laravel",
-        "errortag-laravel"
+        "errortag-laravel",
+        "Error handling",
+        "Error Monitoring",
+        "Error Observability",
+        "Error Alerting",
+        "Error Collaboration"
     ],
     "homepage": "https://github.com/error-tag/errortag-laravel",
     "license": "MIT",
@@ -65,6 +70,6 @@
             }
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true
 }
