@@ -33,6 +33,30 @@ class ErrorTagApiClient
     }
 
     /**
+     * Send an error payload with custom timeout.
+     * Useful for sync sends where we want a shorter timeout.
+     */
+    public function sendWithTimeout(ErrorPayload $payload, int $timeout): bool
+    {
+        try {
+            $response = Http::timeout($timeout)
+                ->withHeaders([
+                    'X-ErrorTag-Key' => $this->apiKey,
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ])
+                ->withUserAgent('ErrorTag-Laravel/1.0')
+                ->post($this->endpoint, $payload->toArray());
+
+            return $response->successful(); // @phpstan-ignore-line
+
+        } catch (\Exception $e) {
+            // Silently fail - timeout or network error shouldn't break the app
+            return false;
+        }
+    }
+
+    /**
      * Test the connection to the ErrorTag API.
      */
     public function testConnection(): bool
