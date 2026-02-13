@@ -117,7 +117,6 @@ class SendErrorToErrorTagJob implements ShouldQueue
     // Check if error is in the error tracking application itself
     $patterns = [
       '/app/Livewire/ErrorDetail.php',
-      '/app/Livewire/RelatedPullRequests.php',
       '/app/Models/Error.php',
       '/app/Models/ErrorOccurrence.php',
       '/app/Services/GitHubService.php',
