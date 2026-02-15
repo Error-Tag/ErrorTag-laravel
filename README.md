@@ -7,6 +7,12 @@
 
 **ErrorTag** is an error monitoring and observability platform. This package is the client SDK that captures errors from your Laravel application and sends them to the ErrorTag dashboard for analysis, alerting, and team collaboration.
 
+## Requirements
+
+- **PHP**: 8.1 or higher
+- **Laravel**: 10.x, 11.x, or 12.x
+- **HTTP Client**: Guzzle (included with Laravel)
+
 ## Features
 
 - **Automatic Error Capture** - Hooks into Laravel's exception handler
@@ -97,6 +103,20 @@ ErrorTag::context([
 ```
 
 ## Configuration
+
+### Laravel Version Compatibility
+
+**Laravel 11+ and 12+**
+ErrorTag automatically registers via its service provider. You can also manually configure exception reporting in `bootstrap/app.php`:
+
+```php
+->withExceptions(function (Exceptions $exceptions): void {
+    // ErrorTag is auto-registered, but you can customize here if needed
+})->create();
+```
+
+**Laravel 10 and below**
+ErrorTag automatically registers via its service provider using the `reportable()` method. No manual configuration needed. Just install the package and configure your `.env` file.
 
 ### Sync vs Async Sending
 
