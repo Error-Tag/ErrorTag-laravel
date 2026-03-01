@@ -18,15 +18,45 @@ class ExceptionData
 
   public static function fromThrowable(Throwable $exception, int $maxDepth = 50, bool $captureArgs = false): self
   {
+    $originFile = $exception->getFile();
+
     return new self(
       message: $exception->getMessage(),
       type: get_class($exception),
-      file: $exception->getFile(),
+      file: self::stripBasePath($originFile),
       line: $exception->getLine(),
       stackTrace: self::formatStackTrace($exception, $maxDepth, $captureArgs),
       code: $exception->getCode() ? (string) $exception->getCode() : null,
-      sourceLines: self::readSourceLines($exception->getFile(), $exception->getLine()),
+      sourceLines: self::readSourceLines($originFile, $exception->getLine()),
     );
+  }
+
+  /**
+   * Strip the application base path from an absolute file path so only the
+   * app-relative portion is stored (e.g. "app/Http/Controllers/Foo.php").
+   * This prevents leaking server directory structure and usernames in payloads.
+   */
+  protected static function stripBasePath(?string $filePath): ?string
+  {
+    if (! $filePath) {
+      return $filePath;
+    }
+
+    $base = rtrim(base_path(), '/') . '/';
+
+    if (str_starts_with($filePath, $base)) {
+      return substr($filePath, strlen($base));
+    }
+
+    // Fallback: strip everything up to and including the 3rd path segment
+    // for common deployment patterns: /var/www/html/app/... → app/...
+    //                                 /home/user/project/app/... → app/...
+    //                                 /srv/www/project/app/... → app/...
+    if (preg_match('#^(?:/[^/]+){1,3}/(.+)$#', $filePath, $m)) {
+      return $m[1];
+    }
+
+    return $filePath;
   }
 
   public function toArray(): array
@@ -48,10 +78,12 @@ class ExceptionData
     $formattedTrace = [];
 
     foreach (array_slice($trace, 0, $maxDepth) as $index => $frame) {
+      $absoluteFile = $frame['file'] ?? null;
+
       $formattedFrame = [
-        'file' => $frame['file'] ?? 'unknown',
-        'line' => $frame['line'] ?? 0,
-        'function' => $frame['function'] ?? 'unknown',
+        'file' => self::stripBasePath($absoluteFile),
+        'line' => $frame['line'] ?? null,
+        'function' => $frame['function'] ?? '{closure}',
       ];
 
       if (isset($frame['class'])) {
@@ -63,11 +95,11 @@ class ExceptionData
         $formattedFrame['args'] = self::sanitizeArgs($frame['args']);
       }
 
-      // Capture source lines at the time of the exception so the dashboard
-      // always shows the code that was actually running, not the current disk state.
+      // Capture source lines using the original absolute path so file_exists() works,
+      // but we store only the stripped relative path in 'file'.
       $formattedFrame['source_lines'] = self::readSourceLines(
-        $formattedFrame['file'],
-        $formattedFrame['line'],
+        $absoluteFile ?? '',
+        $formattedFrame['line'] ?? 0,
       );
 
       $formattedTrace[] = $formattedFrame;
