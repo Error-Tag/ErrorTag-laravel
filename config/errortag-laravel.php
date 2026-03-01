@@ -25,7 +25,7 @@ return [
     |
     */
 
-    'api_endpoint' => env('ERRORTAG_ENDPOINT', 'https://api.errortag.com/api/errors'),
+    'api_endpoint' => env('ERRORTAG_ENDPOINT', 'https://errortag.dev/api/errors'),
 
     /*
     |--------------------------------------------------------------------------
