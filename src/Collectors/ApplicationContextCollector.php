@@ -16,6 +16,8 @@ class ApplicationContextCollector
                 environment: config('errortag-laravel.environment', config('app.env', 'production')),
                 serverName: config('errortag-laravel.server_name', gethostname()),
                 appName: config('app.name'),
+                appUrl: config('app.url'),
+                appLocale: config('app.locale'),
             );
         } catch (\Throwable $e) {
             // Fallback to minimal data if collection fails
@@ -25,6 +27,8 @@ class ApplicationContextCollector
                 environment: 'unknown',
                 serverName: 'unknown',
                 appName: null,
+                appUrl: null,
+                appLocale: null,
             );
         }
     }

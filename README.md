@@ -23,6 +23,7 @@
 - **Circuit Breaker** - Prevents infinite loops and server overload
 - **Highly Configurable** - Sample rates, ignored exceptions, and more
 - **Fully Tested** - Comprehensive test coverage with Pest
+
 ## Installation
 
 Install the package via Composer:

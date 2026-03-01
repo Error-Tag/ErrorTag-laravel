@@ -13,6 +13,7 @@ class ExceptionData
         public readonly int $line,
         public readonly array $stackTrace,
         public readonly ?string $code = null,
+        public readonly array $sourceLines = [],
     ) {}
 
     public static function fromThrowable(Throwable $exception, int $maxDepth = 50, bool $captureArgs = false): self
@@ -24,6 +25,7 @@ class ExceptionData
             line: $exception->getLine(),
             stackTrace: self::formatStackTrace($exception, $maxDepth, $captureArgs),
             code: $exception->getCode() ? (string) $exception->getCode() : null,
+            sourceLines: self::readSourceLines($exception->getFile(), $exception->getLine()),
         );
     }
 
@@ -36,6 +38,7 @@ class ExceptionData
             'line' => $this->line,
             'stack_trace' => $this->stackTrace,
             'code' => $this->code,
+            'source_lines' => $this->sourceLines,
         ];
     }
 
@@ -60,10 +63,54 @@ class ExceptionData
                 $formattedFrame['args'] = self::sanitizeArgs($frame['args']);
             }
 
+            // Capture source lines at the time of the exception so the dashboard
+            // always shows the code that was actually running, not the current disk state.
+            $formattedFrame['source_lines'] = self::readSourceLines(
+                $formattedFrame['file'],
+                $formattedFrame['line'],
+            );
+
             $formattedTrace[] = $formattedFrame;
         }
 
         return $formattedTrace;
+    }
+
+    /**
+     * Read up to 15 lines of context around $errorLine from a file on disk.
+     * Returns an empty array if the file cannot be read (vendor phars, etc.).
+     *
+     * @return array<int, array{number: int, content: string, is_error_line: bool}>
+     */
+    protected static function readSourceLines(string $filePath, int $errorLine, int $context = 15): array
+    {
+        if (! $filePath || $filePath === 'unknown' || ! file_exists($filePath) || ! is_readable($filePath)) {
+            return [];
+        }
+
+        if (filesize($filePath) > 1_000_000) {
+            return [];
+        }
+
+        $lines = file($filePath, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            return [];
+        }
+
+        $total = count($lines);
+        $start = max(0, $errorLine - $context - 1);
+        $end = min($total - 1, $errorLine + $context - 1);
+        $result = [];
+
+        for ($i = $start; $i <= $end; $i++) {
+            $result[] = [
+                'number' => $i + 1,
+                'content' => $lines[$i],
+                'is_error_line' => ($i + 1) === $errorLine,
+            ];
+        }
+
+        return $result;
     }
 
     protected static function sanitizeArgs(array $args): array

@@ -217,6 +217,8 @@ class SendErrorToErrorTagJob implements ShouldQueue
                 environment: $this->errorPayload['application']['environment'],
                 serverName: $this->errorPayload['application']['server_name'],
                 appName: $this->errorPayload['application']['app_name'] ?? null,
+                appUrl: $this->errorPayload['application']['app_url'] ?? null,
+                appLocale: $this->errorPayload['application']['app_locale'] ?? null,
             ),
             customContext: $this->errorPayload['custom_context'] ?? [],
             release: $this->errorPayload['release'] ?? null,
