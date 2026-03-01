@@ -146,12 +146,10 @@ class ExceptionData
       return substr($filePath, strlen($base));
     }
 
-    // Fallback: strip everything up to and including the 3rd path segment
-    // for common deployment patterns: /var/www/html/app/... -> app/...
-    //                                 /home/user/project/app/... -> app/...
-    //                                 /srv/www/project/app/... -> app/...
-    if (preg_match('#^(?:/[^/]+){1,3}/(.+)$#', $filePath, $m)) {
-      return $m[1];
+    // Fallback: strip everything before the first known Laravel project directory.
+    // Handles any deployment depth: /home/user/sites/project/app/... -> app/...
+    if (preg_match('#^.+?/(app|bootstrap|config|database|resources|routes|storage|tests|vendor)/#', $filePath, $m, PREG_OFFSET_CAPTURE)) {
+      return substr($filePath, $m[1][1]);
     }
 
     return $filePath;
