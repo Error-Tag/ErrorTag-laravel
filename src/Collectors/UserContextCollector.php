@@ -29,6 +29,7 @@ class UserContextCollector
                 id: $user->getAuthIdentifier(),
                 email: $this->getUserEmail($user),
                 name: $this->getUserName($user),
+                avatar: $this->getUserAvatar($user),
                 attributes: $this->getUserAttributes($user),
             );
         } catch (\Throwable $e) {
@@ -66,6 +67,42 @@ class UserContextCollector
         // @phpstan-ignore-next-line
         if (property_exists($user, 'name')) {
             return $user->name; // @phpstan-ignore-line
+        }
+
+        return null;
+    }
+
+    protected function getUserAvatar(Authenticatable $user): ?string
+    {
+        // Common avatar/profile_photo methods and properties
+        // @phpstan-ignore-next-line
+        if (method_exists($user, 'getAvatarUrl')) {
+            return $user->getAvatarUrl(); // @phpstan-ignore-line
+        }
+        // @phpstan-ignore-next-line
+        if (method_exists($user, 'profilePhotoUrl')) {
+            return $user->profilePhotoUrl(); // @phpstan-ignore-line
+        }
+        // Laravel Jetstream / Fortify
+        // @phpstan-ignore-next-line
+        if (property_exists($user, 'profile_photo_url')) {
+            return $user->profile_photo_url; // @phpstan-ignore-line
+        }
+        // @phpstan-ignore-next-line
+        if (property_exists($user, 'avatar')) {
+            return $user->avatar; // @phpstan-ignore-line
+        }
+        // @phpstan-ignore-next-line
+        if (property_exists($user, 'avatar_url')) {
+            return $user->avatar_url; // @phpstan-ignore-line
+        }
+
+        // Gravatar fallback using email
+        $email = $this->getUserEmail($user);
+        if ($email) {
+            $hash = md5(strtolower(trim($email)));
+
+            return "https://www.gravatar.com/avatar/{$hash}?d=mp&s=80";
         }
 
         return null;

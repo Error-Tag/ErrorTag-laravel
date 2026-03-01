@@ -26,6 +26,7 @@ class RequestContextCollector
                 headers: $this->sanitizeHeaders($request->headers->all()),
                 body: $this->captureBody ? $this->sanitizeBody($request->all()) : null,
                 routeName: $request->route()?->getName(),
+                routePath: $request->route()?->uri(),
                 controller: $this->getController($request),
                 ip: $request->ip(),
                 userAgent: $request->userAgent(),

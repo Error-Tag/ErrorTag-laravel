@@ -86,6 +86,26 @@ class ErrorTag
             }
         }
 
+        // Skip errors that occur on ignored URL paths (e.g. the ingest endpoint itself)
+        $ignoredUrls = config('errortag-laravel.ignored_urls', []);
+
+        if (! empty($ignoredUrls)) {
+            try {
+                $currentPath = app('request')->path();
+
+                foreach ($ignoredUrls as $pattern) {
+                    if (
+                        str_contains($currentPath, ltrim($pattern, '/')) ||
+                        fnmatch(ltrim($pattern, '/'), $currentPath)
+                    ) {
+                        return false;
+                    }
+                }
+            } catch (\Throwable) {
+                // Request may not be available in CLI context — skip safely
+            }
+        }
+
         return true;
     }
 

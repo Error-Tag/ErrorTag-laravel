@@ -72,6 +72,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ignored URL Paths
+    |--------------------------------------------------------------------------
+    |
+    | URL path patterns where errors should NOT be reported.
+    | Supports exact paths and fnmatch-style wildcards (e.g. 'api/*').
+    | This is especially useful when the ErrorTag dashboard itself uses this
+    | package — add the ingest endpoint to prevent self-reporting loops.
+    |
+    */
+
+    'ignored_urls' => [
+        // 'api/errors',   // uncomment if this app IS the ErrorTag dashboard
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sample Rate
     |--------------------------------------------------------------------------
     |
