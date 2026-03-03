@@ -56,7 +56,7 @@ class ExceptionData
    * Returns [$resolvedAbsolutePath, $resolvedLine]. Falls back to the original
    * values when resolution is not possible.
    */
-  protected static function resolveCompiledView(?string $filePath, ?int $line): array
+  public static function resolveCompiledView(?string $filePath, ?int $line): array
   {
     if (! $filePath || ! $line) {
       return [$filePath, $line];
@@ -134,7 +134,7 @@ class ExceptionData
    * app-relative portion is stored (e.g. "app/Http/Controllers/Foo.php").
    * This prevents leaking server directory structure and usernames in payloads.
    */
-  protected static function stripBasePath(?string $filePath): ?string
+  public static function stripBasePath(?string $filePath): ?string
   {
     if (! $filePath) {
       return $filePath;

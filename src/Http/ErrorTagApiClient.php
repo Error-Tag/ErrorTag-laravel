@@ -25,9 +25,7 @@ class ErrorTagApiClient
       return $response->successful(); // @phpstan-ignore-line
 
     } catch (\Exception $e) {
-      // Log the failure but don't throw - we don't want ErrorTag to break the app
-      report($e);
-
+      // Silently fail - network errors should never break the host app.
       return false;
     }
   }

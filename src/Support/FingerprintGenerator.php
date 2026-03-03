@@ -2,6 +2,7 @@
 
 namespace ErrorTag\ErrorTag\Support;
 
+use ErrorTag\ErrorTag\DataTransferObjects\ExceptionData;
 use Throwable;
 
 class FingerprintGenerator
@@ -12,10 +13,18 @@ class FingerprintGenerator
      */
     public static function generate(Throwable $exception): string
     {
+        $originFile = $exception->getFile();
+        $originLine = $exception->getLine();
+
+        // Keep fingerprints stable across servers by normalizing file paths the same
+        // way we store them in the payload (strip base path, resolve compiled views).
+        [$resolvedFile, $resolvedLine] = ExceptionData::resolveCompiledView($originFile, $originLine);
+        $normalizedFile = ExceptionData::stripBasePath($resolvedFile) ?? $resolvedFile ?? 'unknown';
+
         $components = [
             get_class($exception),
-            $exception->getFile(),
-            $exception->getLine(),
+            $normalizedFile,
+            $resolvedLine ?? $originLine,
         ];
 
         return hash('sha256', implode('|', $components));
