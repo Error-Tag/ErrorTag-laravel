@@ -92,16 +92,28 @@ class SendErrorToErrorTagJob implements ShouldQueue
         $errorFile = $this->errorPayload['exception']['file'] ?? '';
         $errorType = $this->errorPayload['exception']['type'] ?? '';
 
+        if (empty($errorFile)) {
+            return false;
+        }
+
+        // Payload file paths are typically app-relative (e.g. "app/Http/...") because
+        // the SDK strips base_path() before sending. Resolve relative paths locally
+        // so file_exists/php -l checks are meaningful inside the queue worker.
+        $resolvedPath = $errorFile;
+        if (! str_starts_with($resolvedPath, DIRECTORY_SEPARATOR)) {
+            $resolvedPath = base_path($resolvedPath);
+        }
+
         // If file doesn't exist anymore, error is likely fixed (file deleted/moved)
-        if (! empty($errorFile) && ! file_exists($errorFile)) {
+        if (! file_exists($resolvedPath)) {
             return true;
         }
 
         // For parse errors, check if the file has valid PHP syntax now
-        if ($errorType === 'ParseError' && ! empty($errorFile) && file_exists($errorFile)) {
+        if ($errorType === 'ParseError' && file_exists($resolvedPath)) {
             $output = [];
             $exitCode = 0;
-            exec('php -l '.escapeshellarg($errorFile).' 2>&1', $output, $exitCode);
+            exec('php -l '.escapeshellarg($resolvedPath).' 2>&1', $output, $exitCode);
 
             // Exit code 0 means no syntax errors
             if ($exitCode === 0) {
