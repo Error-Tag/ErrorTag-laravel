@@ -68,21 +68,29 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         userCollector: $app->make(UserContextCollector::class),
       );
     });
+
+    // Register exception handler early so it can capture errors that occur
+    // during the boot phase (e.g. ParseError in routes, config, etc.)
+    if (config('errortag-laravel.enabled', true) && config('errortag-laravel.api_key')) {
+      $this->registerExceptionHandler();
+      $this->registerShutdownHandler();
+    }
   }
 
   public function packageBooted(): void
   {
-    // Register exception reporting hook
-    if (config('errortag-laravel.enabled', true) && config('errortag-laravel.api_key')) {
-      $this->registerExceptionHandler();
-      $this->registerErrorHandler();
-      $this->registerShutdownHandler();
+    if (! config('errortag-laravel.enabled', true) || ! config('errortag-laravel.api_key')) {
+      return;
+    }
 
-      // Flush captured errors after the HTTP response has been sent to the user.
-      // This means error reporting never adds latency to the end-user's request.
-      $this->app->terminating(function () {
-        $this->flushPendingErrors();
-      });
+    $this->registerErrorHandler();
+
+    // Enable DB query logging so we can attach queries to error reports.
+    // This is a no-op if the DB facade isn't available (e.g. during early boot).
+    try {
+      \Illuminate\Support\Facades\DB::enableQueryLog();
+    } catch (\Throwable) {
+      // DB may not be available yet — skip silently.
     }
   }
 
@@ -96,7 +104,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
       return;
     }
 
-    // Deduplicate: skip if we already queued this exact fingerprint this request.
+    // Deduplicate: skip if we already sent this exact fingerprint this request.
     if (isset(self::$seen[$payload->fingerprint])) {
       return;
     }
@@ -107,9 +115,18 @@ class ErrorTagServiceProvider extends PackageServiceProvider
       return;
     }
 
-    // Defer: hold the payload until after the response is flushed.
-    // The terminating() hook (registered in packageBooted) will flush them.
-    self::$pendingPayloads[] = $payload;
+    // Send immediately with a short timeout.
+    // We don't defer because terminating() is unreliable with artisan serve
+    // and some hosting environments. A 2-second timeout keeps impact minimal.
+    try {
+      $apiClient = $this->app->make(ErrorTagApiClient::class);
+      $timeout = config('errortag-laravel.sync_timeout', 2);
+      $apiClient->sendWithTimeout($payload, $timeout);
+    } catch (Throwable $e) {
+      if (config('app.debug')) {
+        Log::debug('ErrorTag send failed', ['error' => $e->getMessage()]);
+      }
+    }
   }
 
   /**
@@ -146,37 +163,37 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
   protected function registerExceptionHandler(): void
   {
-    /** @var \Illuminate\Foundation\Exceptions\Handler $handler */
-    $handler = $this->app->make(ExceptionHandler::class);
+    $this->app->make(ExceptionHandler::class) // @phpstan-ignore-line
+      ->reportable(function (Throwable $e) {
+        // Prevent re-entrant capture.
+        if (self::$capturing) {
+          return true;
+        }
 
-    $handler->reportable(function (Throwable $e) { // @phpstan-ignore-line
-      // Prevent re-entrant capture and errors from the package itself.
-      if (self::$capturing) {
-        return;
-      }
+        // Only skip exceptions originating from inside the package's own src/ directory.
+        $file = str_replace('\\', '/', $e->getFile());
+        $packageSrc = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
+        if (str_starts_with($file, $packageSrc)) {
+          return true;
+        }
 
-      $file = $e->getFile();
-      if (str_contains($file, 'ErrorTag') || str_contains($file, 'errortag')) {
-        return;
-      }
+        self::$capturing = true;
 
-      self::$capturing = true;
+        try {
+          $errorTag = $this->app->make(ErrorTag::class);
+          $payload = $errorTag->captureException($e);
+          $this->sendError($payload);
+        } catch (Throwable $errorTagException) {
+          Log::error('ErrorTag failed to capture exception', [
+            'error' => $errorTagException->getMessage(),
+          ]);
+        } finally {
+          self::$capturing = false;
+        }
 
-      try {
-        $errorTag = $this->app->make(ErrorTag::class);
-        $payload = $errorTag->captureException($e);
-
-        $this->sendError($payload);
-      } catch (Throwable $errorTagException) {
-        // Never let ErrorTag break the application
-        // Silently log the failure
-        Log::error('ErrorTag failed to capture exception', [
-          'error' => $errorTagException->getMessage(),
-        ]);
-      } finally {
-        self::$capturing = false;
-      }
-    });
+        // Return true so Laravel continues its own reporting (logs, etc.)
+        return true;
+      });
   }
 
   protected function registerErrorHandler(): void
@@ -192,8 +209,9 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         return false;
       }
 
-      // Don't capture errors from ErrorTag itself
-      if (str_contains($file, 'ErrorTag') || str_contains($file, 'errortag')) {
+      // Don't capture errors from ErrorTag's own src/ directory.
+      $packageSrc = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
+      if (str_starts_with(str_replace('\\', '/', $file), $packageSrc)) {
         return false;
       }
 
@@ -202,9 +220,10 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         return false;
       }
 
-      // Only capture warnings and above by default — skip notices and deprecations
-      // which are high-frequency and rarely actionable.
-      $minLevel = config('errortag-laravel.minimum_error_level', E_WARNING | E_ERROR | E_USER_ERROR | E_USER_WARNING);
+      // Only capture errors at or above the configured minimum level.
+      // Defaults to E_ALL via config, meaning all PHP errors are captured.
+      // Users can raise this to E_WARNING | E_ERROR to reduce noise from notices/deprecations.
+      $minLevel = config('errortag-laravel.minimum_error_level', E_ALL);
       if (! ($severity & $minLevel)) {
         return false;
       }
@@ -234,7 +253,16 @@ class ErrorTagServiceProvider extends PackageServiceProvider
 
   protected function registerShutdownHandler(): void
   {
-    register_shutdown_function(function () {
+    // Capture config values NOW, while the app is still healthy.
+    // During a fatal/parse error the container may be broken.
+    $apiKey = config('errortag-laravel.api_key', '');
+    $endpoint = config('errortag-laravel.api_endpoint', 'https://errortag.dev/api/errors');
+    $environment = config('app.env', 'production');
+    $appName = config('app.name', '');
+    $appUrl = config('app.url', '');
+    $basePath = base_path() . '/';
+
+    register_shutdown_function(function () use ($apiKey, $endpoint, $environment, $appName, $appUrl, $basePath) {
       $error = error_get_last();
 
       // Capture all fatal errors including parse errors
@@ -250,10 +278,10 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         return;
       }
 
+      // First try the normal path through the container (works for runtime fatal errors).
       try {
         $errorTag = $this->app->make(ErrorTag::class);
 
-        // Create a synthetic exception from the fatal error
         $exception = new \ErrorException(
           $error['message'],
           0,
@@ -265,14 +293,115 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         $payload = $errorTag->captureException($exception);
 
         if ($payload) {
-          // For fatal errors the terminating hook won't run, so send directly.
-          self::$pendingPayloads[] = $payload;
-          $this->flushPendingErrors();
+          $apiClient = $this->app->make(ErrorTagApiClient::class);
+          $sent = $apiClient->sendWithTimeout($payload, 5);
+
+          if ($sent) {
+            return; // Sent successfully, we're done.
+          }
+          // sendWithTimeout returned false (network/timeout) — fall through to raw curl.
         }
-      } catch (Throwable $e) {
-        // Can't do much here since we're already in a fatal error state
-        // Try to log it if possible
-        @error_log('ErrorTag shutdown handler failed: ' . $e->getMessage());
+      } catch (Throwable) {
+        // Container is broken (e.g. ParseError during boot). Fall through to raw send.
+      }
+
+      // Fallback: build a minimal payload without the container and send via raw curl.
+      // This handles ParseErrors that break the app before the container is fully built.
+      if (! $apiKey || ! $endpoint || ! function_exists('curl_init')) {
+        return;
+      }
+
+      try {
+        $file = $error['file'];
+        $strippedFile = str_starts_with($file, $basePath)
+          ? substr($file, strlen($basePath))
+          : $file;
+
+        $errorTypeMap = [
+          E_ERROR => 'E_ERROR',
+          E_PARSE => 'ParseError',
+          E_CORE_ERROR => 'E_CORE_ERROR',
+          E_CORE_WARNING => 'E_CORE_WARNING',
+          E_COMPILE_ERROR => 'E_COMPILE_ERROR',
+          E_COMPILE_WARNING => 'E_COMPILE_WARNING',
+          E_USER_ERROR => 'E_USER_ERROR',
+        ];
+
+        $exceptionType = $errorTypeMap[$error['type']] ?? 'FatalError';
+
+        // Read source lines around the error if possible
+        $sourceLines = [];
+        if (is_readable($file) && filesize($file) < 1048576) {
+          $lines = @file($file);
+          if ($lines !== false) {
+            $errorLine = $error['line'];
+            $start = max(1, $errorLine - 15);
+            $end = min(count($lines), $errorLine + 15);
+            for ($i = $start; $i <= $end; $i++) {
+              $sourceLines[] = [
+                'number' => $i,
+                'content' => rtrim($lines[$i - 1]),
+                'is_error_line' => $i === $errorLine,
+              ];
+            }
+          }
+        }
+
+        $fingerprint = hash('sha256', $exceptionType . '|' . $file . '|' . $error['line']);
+
+        $payload = [
+          'fingerprint' => $fingerprint,
+          'exception' => [
+            'message' => $error['message'],
+            'type' => $exceptionType,
+            'file' => $strippedFile,
+            'line' => $error['line'],
+            'stack_trace' => [
+              [
+                'file' => $strippedFile,
+                'line' => $error['line'],
+                'function' => '{main}',
+                'source_lines' => $sourceLines,
+              ],
+            ],
+            'code' => null,
+            'source_lines' => $sourceLines,
+          ],
+          'request' => null,
+          'user' => null,
+          'application' => array_filter([
+            'laravel_version' => \Illuminate\Foundation\Application::VERSION,
+            'php_version' => PHP_VERSION,
+            'environment' => $environment,
+            'server_name' => gethostname() ?: 'unknown',
+            'app_name' => $appName,
+            'app_url' => $appUrl,
+          ]),
+          'custom_context' => [],
+          'release' => null,
+          'timestamp' => date('c'),
+        ];
+
+        $json = json_encode($payload);
+
+        $ch = curl_init($endpoint);
+        curl_setopt_array($ch, [
+          CURLOPT_POST => true,
+          CURLOPT_POSTFIELDS => $json,
+          CURLOPT_HTTPHEADER => [
+            'X-ErrorTag-Key: ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'User-Agent: ErrorTag-Laravel/1.0',
+          ],
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_TIMEOUT => 5,
+          CURLOPT_CONNECTTIMEOUT => 3,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+      } catch (Throwable) {
+        // Nothing we can do — we're in a fatal error shutdown.
       }
     });
   }
