@@ -17,13 +17,25 @@ use Throwable;
 class ErrorTagServiceProvider extends PackageServiceProvider
 {
     protected static bool $capturing = false;
+    protected static bool $capturing = false;
 
+    /** @var array<int, \ErrorTag\ErrorTag\DataTransferObjects\ErrorPayload> */
+    protected static array $pendingPayloads = [];
     /** @var array<int, \ErrorTag\ErrorTag\DataTransferObjects\ErrorPayload> */
     protected static array $pendingPayloads = [];
 
     /** @var array<string, bool> Fingerprints already queued this request — prevents duplicate sends */
     protected static array $seen = [];
+    /** @var array<string, bool> Fingerprints already queued this request — prevents duplicate sends */
+    protected static array $seen = [];
 
+    public function configurePackage(Package $package): void
+    {
+        $package
+            ->name('errortag-laravel')
+            ->hasConfigFile()
+            ->hasCommand(ErrorTagCommand::class);
+    }
     public function configurePackage(Package $package): void
     {
         $package
@@ -42,7 +54,19 @@ class ErrorTagServiceProvider extends PackageServiceProvider
                 timeout: config('errortag-laravel.timeout', 5),
             );
         });
+    public function packageRegistered(): void
+    {
+        // Register the ErrorTag API client as a singleton
+        $this->app->singleton(ErrorTagApiClient::class, function ($app) {
+            return new ErrorTagApiClient(
+                apiKey: config('errortag-laravel.api_key', ''),
+                endpoint: config('errortag-laravel.api_endpoint', 'https://errortag.dev/api/errors'),
+                timeout: config('errortag-laravel.timeout', 5),
+            );
+        });
 
+        // Register context collectors
+        $this->app->singleton(ApplicationContextCollector::class);
         // Register context collectors
         $this->app->singleton(ApplicationContextCollector::class);
 
@@ -53,7 +77,19 @@ class ErrorTagServiceProvider extends PackageServiceProvider
                 captureBody: config('errortag-laravel.capture_request_body', false),
             );
         });
+        $this->app->singleton(RequestContextCollector::class, function ($app) {
+            return new RequestContextCollector(
+                sanitizeHeaders: config('errortag-laravel.sanitize_headers', []),
+                sanitizeFields: config('errortag-laravel.sanitize_fields', []),
+                captureBody: config('errortag-laravel.capture_request_body', false),
+            );
+        });
 
+        $this->app->singleton(UserContextCollector::class, function ($app) {
+            return new UserContextCollector(
+                captureUser: config('errortag-laravel.capture_user', true),
+            );
+        });
         $this->app->singleton(UserContextCollector::class, function ($app) {
             return new UserContextCollector(
                 captureUser: config('errortag-laravel.capture_user', true),
@@ -127,6 +163,15 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         if (! $payload) {
             return;
         }
+    /**
+     * Queue the payload for sending after the response has been sent to the user.
+     * Falls back to immediate sync send if not in an HTTP context (e.g. CLI/queue workers).
+     */
+    protected function sendError($payload): void
+    {
+        if (! $payload) {
+            return;
+        }
 
         // Deduplicate: skip if we already sent this exact fingerprint this request.
         if (isset(self::$seen[$payload->fingerprint])) {
@@ -172,7 +217,19 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         if (empty(self::$pendingPayloads)) {
             return;
         }
+    /**
+     * Send all pending payloads. Called from the terminating hook (after response)
+     * or from the shutdown handler (for fatal errors).
+     */
+    protected function flushPendingErrors(): void
+    {
+        if (empty(self::$pendingPayloads)) {
+            return;
+        }
 
+        $payloads = self::$pendingPayloads;
+        self::$pendingPayloads = [];
+        self::$seen = [];
         $payloads = self::$pendingPayloads;
         self::$pendingPayloads = [];
         self::$seen = [];
@@ -239,7 +296,18 @@ class ErrorTagServiceProvider extends PackageServiceProvider
         if (! config('errortag-laravel.capture_php_errors', true)) {
             return;
         }
+    protected function registerErrorHandler(): void
+    {
+        if (! config('errortag-laravel.capture_php_errors', true)) {
+            return;
+        }
 
+        // Capture PHP errors (warnings, notices, deprecations, etc.)
+        set_error_handler(function ($severity, $message, $file, $line) {
+            // Prevent ErrorTag from capturing its own errors (avoid infinite loops)
+            if (self::$capturing) {
+                return false;
+            }
         // Capture PHP errors (warnings, notices, deprecations, etc.)
         set_error_handler(function ($severity, $message, $file, $line) {
             // Prevent ErrorTag from capturing its own errors (avoid infinite loops)
@@ -257,6 +325,10 @@ class ErrorTagServiceProvider extends PackageServiceProvider
             if (! (error_reporting() & $severity)) {
                 return false;
             }
+            // Don't capture errors that are suppressed with @
+            if (! (error_reporting() & $severity)) {
+                return false;
+            }
 
             // Only capture errors at or above the configured minimum level.
             // Defaults to E_ALL via config, meaning all PHP errors are captured.
@@ -267,13 +339,19 @@ class ErrorTagServiceProvider extends PackageServiceProvider
             }
 
             self::$capturing = true;
+            self::$capturing = true;
 
+            try {
+                $errorTag = $this->app->make(ErrorTag::class);
             try {
                 $errorTag = $this->app->make(ErrorTag::class);
 
                 // Create an exception from the PHP error
                 $exception = new \ErrorException($message, 0, $severity, $file, $line);
+                // Create an exception from the PHP error
+                $exception = new \ErrorException($message, 0, $severity, $file, $line);
 
+                $payload = $errorTag->captureException($exception);
                 $payload = $errorTag->captureException($exception);
 
                 $this->sendError($payload);
@@ -283,7 +361,18 @@ class ErrorTagServiceProvider extends PackageServiceProvider
             } finally {
                 self::$capturing = false;
             }
+                $this->sendError($payload);
+            } catch (Throwable $e) {
+                // Don't break the app if ErrorTag fails
+                Log::error('ErrorTag error handler failed', ['error' => $e->getMessage()]);
+            } finally {
+                self::$capturing = false;
+            }
 
+            // Let PHP handle the error normally as well
+            return false;
+        });
+    }
             // Let PHP handle the error normally as well
             return false;
         });
@@ -324,6 +413,18 @@ class ErrorTagServiceProvider extends PackageServiceProvider
             ])) {
                 return;
             }
+            // Capture all fatal errors including parse errors
+            if ($error === null || ! in_array($error['type'], [
+                E_ERROR,           // Fatal run-time errors
+                E_PARSE,           // Compile-time parse errors (syntax errors)
+                E_CORE_ERROR,      // Fatal errors during PHP's initial startup
+                E_CORE_WARNING,    // Warnings during PHP's initial startup
+                E_COMPILE_ERROR,   // Fatal compile-time errors
+                E_COMPILE_WARNING, // Compile-time warnings
+                E_USER_ERROR,      // User-generated error
+            ])) {
+                return;
+            }
 
             // First try the normal path through the container (works for runtime fatal errors).
             try {
@@ -337,6 +438,7 @@ class ErrorTagServiceProvider extends PackageServiceProvider
                     $error['line']
                 );
 
+                $payload = $errorTag->captureException($exception);
                 $payload = $errorTag->captureException($exception);
 
                 if ($payload) {
