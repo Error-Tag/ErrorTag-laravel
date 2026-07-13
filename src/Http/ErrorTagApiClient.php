@@ -13,6 +13,11 @@ class ErrorTagApiClient
         protected string $endpoint,
         protected int $timeout = 5,
     ) {}
+    public function __construct(
+        protected string $apiKey,
+        protected string $endpoint,
+        protected int $timeout = 5,
+    ) {}
 
     /**
      * Send an error payload to the ErrorTag API.
@@ -23,10 +28,14 @@ class ErrorTagApiClient
             $response = $this->client()->post($this->endpoint, $payload->toArray());
 
             return $response->successful(); // @phpstan-ignore-line
+            return $response->successful(); // @phpstan-ignore-line
 
-        } catch (\Exception $e) {
-            // Log the failure but don't throw - we don't want ErrorTag to break the app
-            report($e);
+        } catch (\Throwable $e) {
+            // Never break the host app, but always log so failures can be diagnosed.
+            \Illuminate\Support\Facades\Log::warning('ErrorTag: failed to deliver error payload', [
+                'error' => $e->getMessage(),
+                'endpoint' => $this->endpoint,
+            ]);
 
             return false;
         }
@@ -47,10 +56,26 @@ class ErrorTagApiClient
                 ])
                 ->withUserAgent('ErrorTag-Laravel/1.0')
                 ->post($this->endpoint, $payload->toArray());
+    /**
+     * Send an error payload with custom timeout.
+     * Useful for sync sends where we want a shorter timeout.
+     */
+    public function sendWithTimeout(ErrorPayload $payload, int $timeout): bool
+    {
+        try {
+            $response = Http::timeout($timeout)
+                ->withHeaders([
+                    'X-ErrorTag-Key' => $this->apiKey,
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ])
+                ->withUserAgent('ErrorTag-Laravel/1.0')
+                ->post($this->endpoint, $payload->toArray());
 
             return $response->successful(); // @phpstan-ignore-line
+            return $response->successful(); // @phpstan-ignore-line
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Silently fail - timeout or network error shouldn't break the app
             return false;
         }
@@ -69,13 +94,38 @@ class ErrorTagApiClient
 
             return;
         }
+    /**
+     * Send multiple payloads in parallel using curl_multi.
+     * Falls back to sequential sends if curl_multi is unavailable.
+     */
+    public function sendMultiple(array $payloads, int $timeout): void
+    {
+        if (! function_exists('curl_multi_init')) {
+            foreach ($payloads as $payload) {
+                $this->sendWithTimeout($payload, $timeout);
+            }
 
+            return;
+        }
+
+        $multi = curl_multi_init();
+        $handles = [];
         $multi = curl_multi_init();
         $handles = [];
 
         foreach ($payloads as $i => $payload) {
             $ch = curl_init($this->endpoint);
             $body = json_encode($payload->toArray());
+
+            if ($body === false) {
+                \Illuminate\Support\Facades\Log::warning('ErrorTag: failed to encode payload as JSON', [
+                    'error' => json_last_error_msg(),
+                    'index' => $i,
+                ]);
+
+                continue;
+            }
+
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => $body,
@@ -115,7 +165,7 @@ class ErrorTagApiClient
 
             return $response->successful(); // @phpstan-ignore-line
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return false;
         }
     }
