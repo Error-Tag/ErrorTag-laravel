@@ -221,6 +221,19 @@ return [
 
   /*
     |--------------------------------------------------------------------------
+    | Sync Retries
+    |--------------------------------------------------------------------------
+    |
+    | Number of send attempts when delivering errors in sync (non-queue) mode.
+    | Retries happen back-to-back immediately — useful for transient network
+    | blips. Keep this small (1-3) to avoid delaying the terminating hook.
+    |
+    */
+
+  'sync_retries' => env('ERRORTAG_SYNC_RETRIES', 2),
+
+  /*
+    |--------------------------------------------------------------------------
     | Use Queue
     |--------------------------------------------------------------------------
     |
